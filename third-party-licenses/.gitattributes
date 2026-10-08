@@ -1,0 +1,11 @@
+# Keep copied upstream license/notice bytes and formatting intact for their hashes.
+# Authored README files and manifests retain normal whitespace checks.
+texts/** -text -whitespace
+**/LICENSE* -text -whitespace
+**/LICENCE* -text -whitespace
+**/license* -text -whitespace
+**/COPYING* -text -whitespace
+**/NOTICE* -text -whitespace
+**/Go-*-LICENSE -text -whitespace
+fonts/*.txt -text -whitespace
+licenses/*.txt -text -whitespace

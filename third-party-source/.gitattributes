@@ -1,0 +1,2 @@
+# Keep verbatim covered-source license files, including upstream final newlines.
+**/LICENSE* -text -whitespace

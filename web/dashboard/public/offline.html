@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f141f" />
+    <title>Hank is offline</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0f141f;
+        color: #f7f9fc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        display: grid;
+        min-height: 100dvh;
+        margin: 0;
+        padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+        place-items: center;
+      }
+      main {
+        width: min(100%, 420px);
+        padding: 28px;
+        border: 1px solid #334155;
+        border-radius: 16px;
+        background: #151c29;
+        box-shadow: 0 18px 50px rgb(0 0 0 / 28%);
+      }
+      p { color: #cbd5e1; line-height: 1.55; }
+      button {
+        min-width: 120px;
+        min-height: 44px;
+        margin-top: 12px;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 10px;
+        background: #5eead4;
+        color: #0f172a;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:focus-visible { outline: 3px solid #f8fafc; outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>Hank</p>
+      <h1>You’re offline</h1>
+      <p>Hank needs a connection for this release.</p>
+      <button type="button">Try again</button>
+      <noscript>Reconnect, then reload this page to continue.</noscript>
+    </main>
+    <script>
+      const retry = () => window.location.reload();
+      document.querySelector("button").addEventListener("click", retry);
+      window.addEventListener("online", retry);
+    </script>
+  </body>
+</html>

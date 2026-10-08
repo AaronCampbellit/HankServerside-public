@@ -1,0 +1,477 @@
+--- a/client.go
++++ b/client.go
+@@ -2,10 +2,8 @@
+ 
+ import (
+ 	"context"
+-	"errors"
+ 	"fmt"
+ 	"io"
+-	"io/fs"
+ 	"math/rand"
+ 	"net"
+ 	"os"
+@@ -19,7 +17,6 @@
+ 	"github.com/cloudsoda/go-smb2/internal/msrpc"
+ 	"github.com/cloudsoda/go-smb2/internal/smb2"
+ 	"github.com/cloudsoda/go-smb2/internal/utf16le"
+-	"github.com/cloudsoda/sddl"
+ )
+ 
+ // SecurityInformationRequestFlags the data that is expected to be returned in Security Information
+@@ -35,21 +32,6 @@
+ 	// SACLSecurityInformation (SACL_SECURITY_INFORMATION) requests the SACL to be returned
+ 	SACLSecurityInformation SecurityInformationRequestFlags = 0x00000008
+ )
+-
+-type SecurityDescriptorEncoder struct {
+-	*sddl.SecurityDescriptor
+-}
+-
+-var _ smb2.Encoder = (*SecurityDescriptorEncoder)(nil)
+-
+-func (se *SecurityDescriptorEncoder) Encode(dest []byte) {
+-	data := se.Binary()
+-	copy(dest, data)
+-}
+-
+-func (se *SecurityDescriptorEncoder) Size() int {
+-	return len(se.Binary())
+-}
+ 
+ // Dialer contains options for func (*Dialer) Dial.
+ type Dialer struct {
+@@ -916,26 +898,6 @@
+ 	return fis, nil
+ }
+ 
+-// ReadDirPlus returns all directory entries enriched with security descriptors,
+-// sorted by name. For directories with many entries, prefer opening the
+-// directory and calling File.ReaddirPlus incrementally.
+-func (fs *Share) ReadDirPlus(dirname string, securityInfo SecurityInformationRequestFlags) ([]DirEntryPlus, error) {
+-	f, err := fs.Open(dirname)
+-	if err != nil {
+-		return nil, err
+-	}
+-	defer f.Close()
+-
+-	entries, err := f.ReaddirPlus(-1, securityInfo)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+-
+-	return entries, nil
+-}
+-
+ const (
+ 	intSize = 32 << (^uint(0) >> 63) // 32 or 64
+ 	maxInt  = 1<<(intSize-1) - 1
+@@ -1028,21 +990,6 @@
+ 	return fi, nil
+ }
+ 
+-// SecurityInfo returns the security descriptor of a file
+-func (fs *Share) SecurityInfo(name string, info SecurityInformationRequestFlags) (*sddl.SecurityDescriptor, error) {
+-	data, err := fs.SecurityInfoRaw(name, info)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	sd, err := sddl.FromBinary(data)
+-	if err != nil {
+-		return nil, fmt.Errorf("parsing binary representation of security descriptor: %w", err)
+-	}
+-
+-	return sd, nil
+-}
+-
+ // SecurityInfoRaw returns the raw security descriptor of a file as a byte array
+ func (fs *Share) SecurityInfoRaw(name string, info SecurityInformationRequestFlags) ([]byte, error) {
+ 	const op = "secinfo"
+@@ -1094,10 +1041,6 @@
+ 	defer f.Close()
+ 
+ 	return f.SecurityInfoRaw(info)
+-}
+-
+-func (fs *Share) SetSecurityInfo(name string, flags SecurityInformationRequestFlags, sd *sddl.SecurityDescriptor) error {
+-	return fs.SetSecurityInfoRaw(name, flags, &SecurityDescriptorEncoder{sd})
+ }
+ 
+ func (fs *Share) SetSecurityInfoRaw(name string, flags SecurityInformationRequestFlags, sd smb2.Encoder) error {
+@@ -1557,71 +1500,6 @@
+ 	f.dirents = []os.FileInfo{}
+ 
+ 	return fi, nil
+-}
+-
+-// ReaddirPlus reads directory entries enriched with security descriptors.
+-// Like Readdir(n), it is incremental — each call returns the next n entries
+-// with their security descriptors. Returns io.EOF after the last entry.
+-//
+-// Security queries use SMB2 compound requests (CREATE+QUERY_INFO+CLOSE batched
+-// into single round-trips), sub-batching internally to respect credit limits.
+-func (f *File) ReaddirPlus(n int, securityInfo SecurityInformationRequestFlags) ([]DirEntryPlus, error) {
+-	fi, err := f.Readdir(n)
+-	if len(fi) == 0 {
+-		return nil, err
+-	}
+-
+-	// Build relative paths for the compound security query.
+-	// File names from Readdir are bare names; prefix with the directory path.
+-	dir := f.name
+-	paths := make([]string, len(fi))
+-	for i, info := range fi {
+-		if dir == "" {
+-			paths[i] = info.Name()
+-		} else {
+-			paths[i] = dir + `\` + info.Name()
+-		}
+-	}
+-
+-	tc := f.fs.treeConn
+-	secResults, secErr := tc.compoundSecurityInfoBatch(
+-		paths, uint32(securityInfo), f.mapping, f.fs.ctx,
+-	)
+-	if secErr != nil {
+-		// If the compound batch itself failed, return entries without security info
+-		// and propagate the batch error on the first entry.
+-		entries := make([]DirEntryPlus, len(fi))
+-		for i, info := range fi {
+-			entries[i] = DirEntryPlus{FileInfo: info, Err: secErr}
+-		}
+-		return entries, errors.Join(err, secErr)
+-	}
+-
+-	entries := make([]DirEntryPlus, 0, len(fi))
+-	for i, info := range fi {
+-		var sd *sddl.SecurityDescriptor
+-		var err error
+-		if secResults[i].err != nil {
+-			if isFileDeleted(secResults[i].err) {
+-				continue // file deleted between Readdir and security query
+-			}
+-			err = secResults[i].err
+-		} else if secResults[i].data != nil {
+-			var parseErr error
+-			sd, parseErr = sddl.FromBinary(secResults[i].data)
+-			if parseErr != nil {
+-				sd = nil // belt-and-suspenders assignment
+-				err = fmt.Errorf("parsing security descriptor for %s: %w", info.Name(), parseErr)
+-			}
+-		}
+-		entries = append(entries, DirEntryPlus{
+-			FileInfo:           info,
+-			SecurityDescriptor: sd,
+-			Err:                err,
+-		})
+-	}
+-
+-	return entries, err
+ }
+ 
+ func (f *File) Readdirnames(n int) (names []string, err error) {
+@@ -2352,20 +2230,6 @@
+ 	return r.OutputBuffer(), nil
+ }
+ 
+-func (f *File) SecurityInfo(flags SecurityInformationRequestFlags) (*sddl.SecurityDescriptor, error) {
+-	data, err := f.SecurityInfoRaw(flags)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	sd, err := sddl.FromBinary(data)
+-	if err != nil {
+-		return nil, fmt.Errorf("parsing binary representation of security descriptor: %w", err)
+-	}
+-
+-	return sd, nil
+-}
+-
+ func (f *File) SecurityInfoRaw(info SecurityInformationRequestFlags) ([]byte, error) {
+ 	op := "secinfo"
+ 	req := &smb2.QueryInfoRequest{
+@@ -2381,10 +2245,6 @@
+ 	}
+ 
+ 	return infoBytes, nil
+-}
+-
+-func (f *File) SetSecurityInfo(flags SecurityInformationRequestFlags, sd *sddl.SecurityDescriptor) error {
+-	return f.SetSecurityInfoRaw(flags, &SecurityDescriptorEncoder{sd})
+ }
+ 
+ func (f *File) SetSecurityInfoRaw(flags SecurityInformationRequestFlags, sd smb2.Encoder) error {
+@@ -2506,17 +2366,3 @@
+ 	return fs
+ }
+ 
+-// DirEntryPlus extends os.FileInfo with security metadata obtained via
+-// compound requests. It implements fs.DirEntry.
+-type DirEntryPlus struct {
+-	os.FileInfo
+-	SecurityDescriptor *sddl.SecurityDescriptor
+-
+-	Err error // non-nil if the security query failed for this entry
+-}
+-
+-var _ fs.DirEntry = &DirEntryPlus{}
+-
+-func (d *DirEntryPlus) Type() os.FileMode          { return d.FileInfo.Mode().Type() }
+-func (d *DirEntryPlus) Info() (os.FileInfo, error) { return d.FileInfo, nil }
+-func (d *DirEntryPlus) Name() string               { return d.FileInfo.Name() }
+--- a/smb2_test.go
++++ b/smb2_test.go
+@@ -910,184 +910,3 @@
+ 	require.NoError(t, session.Echo())
+ }
+ 
+-func TestSecurityDescriptor(t *testing.T) {
+-	if fs == nil {
+-		t.Skip()
+-	}
+-	testDir := fmt.Sprintf("testDir-%d-TestFile", os.Getpid())
+-	err := fs.Mkdir(testDir, 0755)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	defer func() {
+-		_ = fs.RemoveAll(testDir)
+-	}()
+-
+-	f, err := fs.Create(testDir + `\testFile`)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	defer func() {
+-		f.Close()
+-		_ = fs.Remove(testDir + `\testFile`)
+-	}()
+-
+-	flags := smb2.OwnerSecurityInformation | smb2.GroupSecurityInformation | smb2.DACLSecurityInformation
+-	sd, err := f.SecurityInfo(flags)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-
+-	if sd == nil {
+-		t.Error("unexpected nil SD")
+-	}
+-}
+-
+-func TestReaddirPlus(t *testing.T) {
+-	if fs == nil {
+-		t.Skip()
+-	}
+-	testDir := fmt.Sprintf("testDir-%d-TestReaddirPlus", os.Getpid())
+-	err := fs.Mkdir(testDir, 0755)
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	defer func() {
+-		_ = fs.RemoveAll(testDir)
+-	}()
+-
+-	// Create enough files to exercise multi-batch incremental reads.
+-	fileNames := []string{
+-		"alpha.txt", "bravo.txt", "charlie.txt", "delta.txt",
+-		"echo.txt", "foxtrot.txt", "golf.txt", "hotel.txt",
+-		"india.txt", "juliet.txt",
+-	}
+-	for _, name := range fileNames {
+-		f, err := fs.Create(testDir + `\` + name)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		f.Close()
+-	}
+-
+-	flags := smb2.OwnerSecurityInformation | smb2.GroupSecurityInformation | smb2.DACLSecurityInformation
+-
+-	t.Run("File.ReaddirPlus_all", func(t *testing.T) {
+-		d, err := fs.Open(testDir)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		defer d.Close()
+-
+-		entries, err := d.ReaddirPlus(-1, flags)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-
+-		if len(entries) != len(fileNames) {
+-			t.Fatalf("expected %d entries, got %d", len(fileNames), len(entries))
+-		}
+-
+-		for _, e := range entries {
+-			if e.Err != nil {
+-				t.Errorf("entry %s: unexpected error: %v", e.Name(), e.Err)
+-				continue
+-			}
+-			if e.SecurityDescriptor == nil {
+-				t.Errorf("entry %s: expected non-nil SecurityDescriptor", e.Name())
+-			}
+-			if e.IsDir() {
+-				t.Errorf("entry %s: expected file, got directory", e.Name())
+-			}
+-		}
+-
+-		// Verify EOF on subsequent call.
+-		entries2, err := d.ReaddirPlus(1, flags)
+-		require.Equal(t, io.EOF, err)
+-		require.Empty(t, entries2)
+-	})
+-
+-	t.Run("File.ReaddirPlus_incremental", func(t *testing.T) {
+-		d, err := fs.Open(testDir)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		defer d.Close()
+-
+-		var all []smb2.DirEntryPlus
+-
+-		// Read 3 at a time to exercise multiple batches.
+-		const batchSize = 3
+-		for {
+-			entries, err := d.ReaddirPlus(batchSize, flags)
+-			all = append(all, entries...)
+-			if err == io.EOF {
+-				break
+-			}
+-			if err != nil {
+-				t.Fatal(err)
+-			}
+-			if len(entries) == 0 || len(entries) > batchSize {
+-				t.Fatalf("expected 1-%d entries, got %d", batchSize, len(entries))
+-			}
+-		}
+-
+-		if len(all) != len(fileNames) {
+-			t.Fatalf("expected %d total entries, got %d", len(fileNames), len(all))
+-		}
+-
+-		for _, e := range all {
+-			if e.Err != nil {
+-				t.Errorf("entry %s: unexpected error: %v", e.Name(), e.Err)
+-			}
+-			if e.SecurityDescriptor == nil {
+-				t.Errorf("entry %s: expected non-nil SecurityDescriptor", e.Name())
+-			}
+-		}
+-	})
+-
+-	t.Run("Share.ReadDirPlus", func(t *testing.T) {
+-		entries, err := fs.ReadDirPlus(testDir, flags)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-
+-		if len(entries) != len(fileNames) {
+-			t.Fatalf("expected %d entries, got %d", len(fileNames), len(entries))
+-		}
+-
+-		// Share.ReadDirPlus sorts by name.
+-		sortedNames := make([]string, len(fileNames))
+-		copy(sortedNames, fileNames)
+-		sort.Strings(sortedNames)
+-
+-		for i, name := range sortedNames {
+-			if entries[i].Name() != name {
+-				t.Errorf("entry %d: expected name %q, got %q", i, name, entries[i].Name())
+-			}
+-			if entries[i].Err != nil {
+-				t.Errorf("entry %s: unexpected error: %v", name, entries[i].Err)
+-				continue
+-			}
+-			if entries[i].SecurityDescriptor == nil {
+-				t.Errorf("entry %s: expected non-nil SecurityDescriptor", name)
+-			}
+-		}
+-	})
+-
+-	t.Run("empty_directory", func(t *testing.T) {
+-		emptyDir := testDir + `\empty`
+-		err := fs.Mkdir(emptyDir, 0755)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-
+-		entries, err := fs.ReadDirPlus(emptyDir, flags)
+-		if err != nil {
+-			t.Fatal(err)
+-		}
+-		if len(entries) != 0 {
+-			t.Errorf("expected 0 entries, got %d", len(entries))
+-		}
+-	})
+-}
+--- a/go.mod
++++ b/go.mod
+@@ -1,13 +1,12 @@
+ module github.com/cloudsoda/go-smb2
+ 
+-go 1.25
++go 1.26.8
+ 
+ require (
+-	github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc
+ 	github.com/geoffgarside/ber v1.1.0
+ 	github.com/jcmturner/gokrb5/v8 v8.4.4
+-	github.com/stretchr/testify v1.8.3
+-	golang.org/x/crypto v0.9.0
++	github.com/stretchr/testify v1.11.1
++	golang.org/x/crypto v0.56.0
+ )
+ 
+ require (
+@@ -19,6 +18,6 @@
+ 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
+ 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+ 	github.com/pmezard/go-difflib v1.0.0 // indirect
+-	golang.org/x/net v0.10.0 // indirect
++	golang.org/x/net v0.57.0 // indirect
+ 	gopkg.in/yaml.v3 v3.0.1 // indirect
+ )
+--- a/go.sum
++++ b/go.sum
+@@ -1,5 +1,3 @@
+-github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc h1:0xCWmFKBmarCqqqLeM7jFBSw/Or81UEElFqO8MY+GDs=
+-github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc/go.mod h1:uvR42Hb/t52HQd7x5/ZLzZEK8oihrFpgnodIJ1vte2E=
+ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+@@ -33,14 +31,14 @@
+ github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
+ github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+-github.com/stretchr/testify v1.8.3 h1:RP3t2pwF7cMEbC1dqtB6poj3niw/9gnV4Cjg5oW5gtY=
+-github.com/stretchr/testify v1.8.3/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
++github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
++github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+ github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+ golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
+ golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
+ golang.org/x/crypto v0.6.0/go.mod h1:OFC/31mSvZgRz0V1QTNCzfAI1aIRzbiufJtkMIlEp58=
+-golang.org/x/crypto v0.9.0 h1:LF6fAI+IutBocDJ2OT0Q1g8plpYljMZ4+lty+dsqw3g=
+-golang.org/x/crypto v0.9.0/go.mod h1:yrmDGqONDYtNj3tH8X9dzUun2m2lzPa9ngI6/RUPGR0=
++golang.org/x/crypto v0.56.0 h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=
++golang.org/x/crypto v0.56.0/go.mod h1:OMW5y6CY9l38uPLmxU6l6pwcXp1obtLo3e6gT7gQR2I=
+ golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4/go.mod h1:jJ57K6gSWd91VN4djpZkiMVwK6gcyfeH4XE8wZrZaV4=
+ golang.org/x/net v0.0.0-20190620200207-3b0461eec859/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
+ golang.org/x/net v0.0.0-20200114155413-6afb5195e5aa/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
+@@ -48,8 +46,8 @@
+ golang.org/x/net v0.0.0-20220722155237-a158d28d115b/go.mod h1:XRhObCWvk6IyKnWLug+ECip1KBveYUHfp+8e9klMJ9c=
+ golang.org/x/net v0.6.0/go.mod h1:2Tu9+aMcznHK/AK1HMvgo6xiTLG5rD5rZLDS+rp2Bjs=
+ golang.org/x/net v0.7.0/go.mod h1:2Tu9+aMcznHK/AK1HMvgo6xiTLG5rD5rZLDS+rp2Bjs=
+-golang.org/x/net v0.10.0 h1:X2//UzNDwYmtCLn7To6G58Wr6f5ahEAQgKNzv9Y951M=
+-golang.org/x/net v0.10.0/go.mod h1:0qNGK6F8kojg2nk9dLZ2mShWaEBan6FAoqfSigmmuDg=
++golang.org/x/net v0.57.0 h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=
++golang.org/x/net v0.57.0/go.mod h1:KpXc8iv+r3XplLAG/f7Jsf9RPszJzdR0f58q9vGOuEU=
+ golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+ golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+ golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=

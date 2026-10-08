@@ -1,0 +1,178 @@
+groups:
+  - name: hank-production
+    rules:
+      - alert: HankCloudScrapeMissing
+        expr: up{job="hank-cloud"} == 0 or absent(up{job="hank-cloud"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank metrics collection is unavailable
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankAlertmanagerScrapeMissing
+        expr: up{job="alertmanager"} == 0 or absent(up{job="alertmanager"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank Alertmanager metrics collection is unavailable
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankAlertDeliveryUnconfigured
+        expr: alertmanager_integrations{job="alertmanager"} == 0 or absent(alertmanager_integrations{job="alertmanager"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank has no configured alert delivery integration
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankAlertDeliveryFailures
+        expr: increase(alertmanager_notifications_failed_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank alert notifications could not be delivered
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankLoginFailureSpike
+        expr: increase(hank_auth_failures_total{kind=~"login_.*"}[10m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank login failures spiked
+          runbook: docs/runbooks/auth-failures.md
+      - alert: HankAgentAuthFailureSpike
+        expr: increase(hank_auth_failures_total{kind=~"agent_.*"}[10m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank agent authentication failures spiked
+          runbook: docs/runbooks/auth-failures.md
+      - alert: HankAgentOffline
+        expr: hank_primary_agent_online == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Primary Hank Agent is offline
+          runbook: docs/runbooks/agent-offline.md
+      - alert: HankRoutedRequestTimeoutSpike
+        expr: increase(hank_route_failures_total{code="request_timeout"}[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank routed request timeouts increased
+          runbook: docs/runbooks/agent-offline.md
+      - alert: HankDBConnectionsSaturated
+        expr: hank_db_in_use_connections > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank database pool is saturated
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankDBPingFailure
+        expr: hank_db_ping_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank cannot ping the primary database
+          runbook: docs/runbooks/storage-failures.md
+      - alert: HankStaleBackup
+        expr: time() - hank_db_backup_last_success_unixtime > 86400
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank database backup is stale
+          runbook: docs/runbooks/storage-failures.md
+      - alert: HankStaleRestoreTest
+        expr: time() - hank_db_restore_test_last_success_unixtime > 604800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank restore test is stale
+          runbook: docs/runbooks/storage-failures.md
+      - alert: HankHostMetricsMissing
+        expr: up{job="hank-host"} == 0 or absent(up{job="hank-host"}) or absent(node_filesystem_avail_bytes{job="hank-host",mountpoint="/"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank host filesystem metrics are unavailable
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankDiskUsageHigh
+        expr: |
+          (1 - (node_filesystem_avail_bytes{job="hank-host",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{job="hank-host",fstype!~"tmpfs|overlay|squashfs"})) > 0.85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank host disk usage is high
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankFileJobsRequireRollback
+        expr: hank_file_operation_jobs{status="rollback_required"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank file operation jobs require rollback
+          runbook: docs/runbooks/file-transfer-failures.md
+      - alert: HankFileTransferFailures
+        expr: increase(hank_route_failures_total{code=~"transfer_.*|route_write_failed"}[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank file transfer failures increased
+          runbook: docs/runbooks/file-transfer-failures.md
+      - alert: HankAssistantProviderErrorSpike
+        expr: increase(hank_assistant_provider_errors_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Hank assistant provider errors increased
+          runbook: docs/runbooks/home-assistant-failures.md
+      - alert: HankCloudRuntimeHeartbeatMissing
+        expr: hank_cloud_runtime_up == 0 or hank_cloud_runtime_heartbeat_age_seconds > 45
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Hank cloud runtime heartbeat is missing or stale
+          runbook: docs/runbooks/single-host-compose.md
+      - alert: HankDesktopJoinAuthFailures
+        expr: increase(hank_desktop_join_total{outcome=~"failed|replayed"}[10m]) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: Remote Desktop join authentication failures increased, runbook: docs/remote-desktop/v1-operations.md }
+      - alert: HankDesktopReconnectFailures
+        expr: sum(rate(hank_desktop_reconnect_total{outcome="failed"}[15m])) / clamp_min(sum(rate(hank_desktop_reconnect_total[15m])), 0.001) > 0.25
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: Remote Desktop reconnect failure ratio is high, runbook: docs/remote-desktop/v1-operations.md }
+      - alert: HankDesktopRelayBackpressure
+        expr: increase(hank_desktop_relay_backpressure_total[10m]) > 5 or increase(hank_desktop_terminated_total{reason="slow_consumer"}[10m]) > 2
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: Remote Desktop relay consumers are falling behind, runbook: docs/remote-desktop/v1-operations.md }
+      - alert: HankDesktopCapacityNearLimit
+        expr: sum(hank_desktop_sessions{state=~"offered|joining|active|reconnecting"}) >= 28
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: Remote Desktop sessions are near process capacity, runbook: docs/remote-desktop/v1-operations.md }
+      - alert: HankDesktopReadinessLost
+        expr: hank_desktop_readiness_reported == 1 and on (platform, check) hank_desktop_readiness == 0
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: Remote Desktop endpoint readiness was lost, runbook: docs/remote-desktop/v1-operations.md }
+      - alert: HankDesktopAbnormalTermination
+        expr: increase(hank_desktop_terminated_total{reason!~"user_ended|agent_ended|local_ended"}[15m]) > 5
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: Remote Desktop abnormal terminations increased, runbook: docs/remote-desktop/v1-operations.md }

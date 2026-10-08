@@ -1,0 +1,8 @@
+.fleet-access-panel .settings-form { display: grid; gap: 16px; max-width: 680px; }
+.fleet-access-panel .settings-form > label, .linux-pair-server { display: grid; gap: 8px; }
+.fleet-access-panel select, .fleet-access-panel input[type="number"], .linux-pair-server input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #334155; border-radius: 8px; padding: 10px; background: #111827; color: #e2e8f0; font: inherit; }
+.fleet-access-panel .card-list { margin-top: 20px; }
+.fleet-access-panel .dashboard-tile { overflow-wrap: anywhere; }
+.fleet-access-summary { border: 1px solid #334155; border-radius: 10px; padding: 16px; max-width: 648px; }
+.fleet-access-summary p { margin-bottom: 0; }
+.fleet-access-panel details p { margin: 8px 0; }

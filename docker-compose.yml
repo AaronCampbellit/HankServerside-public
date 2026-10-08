@@ -1,0 +1,284 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: hank-postgres:pg18
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    shm_size: "1gb"
+    logging: *default-logging
+    env_file:
+      - path: ${HANK_CLOUD_ENV_FILE:-./.env.cloud}
+        required: true
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      PGBACKREST_REPO1_CIPHER_PASS: ${HANK_DB_OPS_REPO_CIPHER_PASS}
+    volumes:
+      - hank_pg18_postgres_data:/var/lib/postgresql
+      - hank_pg18_pgbackrest_repo:/var/lib/pgbackrest
+      - hank_pg18_pgbackrest_logs:/var/log/pgbackrest
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command:
+      - "postgres"
+      - "-c"
+      - "archive_mode=on"
+      - "-c"
+      - "archive_command=pgbackrest --stanza=hank --repo1-cipher-type=aes-256-cbc archive-push %p"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "log_min_duration_statement=250ms"
+      - "-c"
+      - "max_wal_senders=3"
+      - "-c"
+      - "unix_socket_directories=/var/run/postgresql,/var/lib/postgresql/data"
+    restart: unless-stopped
+    networks:
+      - hank_db
+
+  cloud:
+    image: hankserverside
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+      args:
+        BUILD_VERSION: ${HANK_BUILD_VERSION:-dev}
+        SOURCE_COMMIT: ${HANK_SOURCE_COMMIT:-unknown}
+    logging: *default-logging
+    env_file:
+      - path: ${HANK_CLOUD_ENV_FILE:-./.env.cloud}
+        required: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${HANK_CLOUD_HOST_BIND}:${HANK_CLOUD_HOST_PORT}:8080"
+    environment:
+      HANK_MONITORING_CONFIG_DIR: /var/lib/hank/monitoring
+      HANK_ALERTMANAGER_URL: http://alertmanager:9093
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - hank_db_ops_state:/var/lib/hank/db-ops/state
+      - hank_db_ops_logs:/var/log/hank/db-ops
+      - hank_note_attachments:/var/lib/hank/note-attachments
+      - hank_monitoring_config:/var/lib/hank/monitoring
+      - ${HANK_LINUX_AGENT_RELEASE_HOST_DIR:-./data/linux-agent-release}:/var/lib/hank/linux-agent-release:ro
+    command: ["/usr/local/bin/hank-server"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - hank_app
+      - hank_db
+
+  db-ops:
+    image: hank-db-ops:pg18
+    build:
+      context: .
+      dockerfile: Dockerfile.dbops
+    logging: *default-logging
+    env_file:
+      - path: ${HANK_CLOUD_ENV_FILE:-./.env.cloud}
+        required: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-hankserverside}
+      HANK_CLOUD_ENV_FILE: /run/hank/db-ops-compose.env
+      HANK_DB_OPS_COMPOSE_ENV_FILE: /run/hank/db-ops-compose.env
+      HANK_CLOUD_HOST_BIND: ${HANK_CLOUD_HOST_BIND}
+      HANK_CLOUD_HOST_PORT: ${HANK_CLOUD_HOST_PORT}
+      PGBACKREST_REPO1_CIPHER_PASS: ${HANK_DB_OPS_REPO_CIPHER_PASS}
+    group_add:
+      - "${HANK_DB_OPS_DOCKER_GID:-0}"
+      - "${HANK_DB_OPS_SHARED_GID:-101}"
+    volumes:
+      - hank_pg18_postgres_data:/var/lib/postgresql
+      - hank_pg18_postgres_restore_data:/var/lib/postgresql/restore
+      - hank_pg18_pgbackrest_repo:/var/lib/pgbackrest
+      - hank_db_ops_state:/var/lib/hank/db-ops/state
+      - hank_db_ops_logs:/var/log/hank/db-ops
+      - hank_note_attachments:/var/lib/hank/note-attachments
+      - hank_note_attachments_restore:/var/lib/hank/note-attachments-restore
+      - hank_pg18_pgbackrest_logs:/var/log/pgbackrest
+      - ${HANK_DB_OPS_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ./:/workspace:ro
+    command: ["/usr/local/bin/hank-db-ops"]
+    restart: unless-stopped
+    networks:
+      - hank_db
+      - hank_restore
+
+  postgres-restore:
+    image: hank-postgres:pg18
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    shm_size: "1gb"
+    logging: *default-logging
+    profiles:
+      - restore
+    env_file:
+      - path: ${HANK_CLOUD_ENV_FILE:-./.env.cloud}
+        required: true
+    environment:
+      PGDATA: /var/lib/postgresql/restore
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      PGBACKREST_REPO1_CIPHER_PASS: ${HANK_DB_OPS_REPO_CIPHER_PASS}
+    tmpfs:
+      - /var/lib/postgresql
+    volumes:
+      - hank_pg18_postgres_restore_data:/var/lib/postgresql/restore
+      - hank_pg18_pgbackrest_repo:/var/lib/pgbackrest:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command:
+      - "postgres"
+      - "-c"
+      - "archive_mode=off"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "unix_socket_directories=/var/run/postgresql,/var/lib/postgresql/restore"
+    restart: "no"
+    networks:
+      - hank_restore
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles:
+      - monitoring
+    logging: *default-logging
+    depends_on:
+      - cloud
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - type: bind
+        source: ./ops/prometheus/secrets/metrics-token
+        target: /etc/prometheus/secrets/metrics-token
+        read_only: true
+        bind:
+          create_host_path: false
+      - hank_prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+    networks:
+      - hank_app
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles:
+      - monitoring
+    logging: *default-logging
+    depends_on:
+      cloud:
+        condition: service_healthy
+    command:
+      - --config.file=/etc/alertmanager/managed/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=
+    volumes:
+      - hank_monitoring_config:/etc/alertmanager/managed:ro
+      - hank_alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    restart: unless-stopped
+    networks:
+      - hank_app
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    profiles:
+      - monitoring
+    logging: *default-logging
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.disable-defaults
+      - --collector.filesystem
+    restart: unless-stopped
+    networks:
+      - hank_app
+
+  agent:
+    image: hankserverside
+    profiles:
+      - agent
+    user: "${HANK_AGENT_CONTAINER_USER:-0:0}"
+    logging: *default-logging
+    env_file:
+      - path: ./.env.agent
+        required: true
+    depends_on:
+      - cloud
+    volumes:
+      - ./.env.agent:/app/.env.agent
+      - hank_agent_apps:/var/lib/hank/apps
+      - hank_agent_app_permissions:/var/lib/hank/apps-permissions
+      - hank_agent_app_staging:/var/lib/hank/app-staging
+      - hank_agent_operations:/var/lib/hank/assistant-operations
+      - hank_agent_files:/srv/hank/files
+      - hank_agent_notes:/srv/hank/notes
+    command: ["/usr/local/bin/hank-agent"]
+    restart: unless-stopped
+    networks:
+      - hank_app
+
+volumes:
+  hank_monitoring_config:
+  hank_prometheus_data:
+  hank_alertmanager_data:
+  hank_pg18_postgres_data:
+  hank_pg18_postgres_restore_data:
+  hank_pg18_pgbackrest_repo:
+  hank_pg18_pgbackrest_logs:
+  hank_db_ops_state:
+  hank_db_ops_logs:
+  hank_note_attachments:
+  hank_note_attachments_restore:
+  hank_agent_apps:
+  hank_agent_app_permissions:
+  hank_agent_app_staging:
+  hank_agent_operations:
+  hank_agent_files:
+  hank_agent_notes:
+
+networks:
+  hank_app:
+  hank_db:
+    internal: true
+  hank_restore:
+    internal: true

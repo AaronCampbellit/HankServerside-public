@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # The Hank cloud /metrics endpoint requires authentication. Create
+  # ops/prometheus/secrets/metrics-token (gitignored) containing the same
+  # value as HANK_METRICS_SCRAPE_TOKEN in .env.cloud.
+  - job_name: hank-cloud
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/metrics-token
+    static_configs:
+      - targets: ["cloud:8080"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+  - job_name: hank-host
+    static_configs:
+      - targets: ["node-exporter:9100"]

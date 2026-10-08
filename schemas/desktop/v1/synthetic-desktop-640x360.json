@@ -1,0 +1,373 @@
+{
+  "access_units" : [
+    {
+      "index" : 0,
+      "keyframe" : true,
+      "length" : 1505,
+      "offset" : 0
+    },
+    {
+      "index" : 1,
+      "keyframe" : false,
+      "length" : 1329,
+      "offset" : 1505
+    },
+    {
+      "index" : 2,
+      "keyframe" : false,
+      "length" : 1288,
+      "offset" : 2834
+    },
+    {
+      "index" : 3,
+      "keyframe" : false,
+      "length" : 1523,
+      "offset" : 4122
+    },
+    {
+      "index" : 4,
+      "keyframe" : false,
+      "length" : 1644,
+      "offset" : 5645
+    },
+    {
+      "index" : 5,
+      "keyframe" : false,
+      "length" : 1671,
+      "offset" : 7289
+    },
+    {
+      "index" : 6,
+      "keyframe" : false,
+      "length" : 1609,
+      "offset" : 8960
+    },
+    {
+      "index" : 7,
+      "keyframe" : false,
+      "length" : 1450,
+      "offset" : 10569
+    },
+    {
+      "index" : 8,
+      "keyframe" : false,
+      "length" : 1443,
+      "offset" : 12019
+    },
+    {
+      "index" : 9,
+      "keyframe" : false,
+      "length" : 1470,
+      "offset" : 13462
+    },
+    {
+      "index" : 10,
+      "keyframe" : false,
+      "length" : 1924,
+      "offset" : 14932
+    },
+    {
+      "index" : 11,
+      "keyframe" : false,
+      "length" : 1542,
+      "offset" : 16856
+    },
+    {
+      "index" : 12,
+      "keyframe" : false,
+      "length" : 1495,
+      "offset" : 18398
+    },
+    {
+      "index" : 13,
+      "keyframe" : false,
+      "length" : 1440,
+      "offset" : 19893
+    },
+    {
+      "index" : 14,
+      "keyframe" : false,
+      "length" : 1501,
+      "offset" : 21333
+    },
+    {
+      "index" : 15,
+      "keyframe" : false,
+      "length" : 1768,
+      "offset" : 22834
+    },
+    {
+      "index" : 16,
+      "keyframe" : false,
+      "length" : 1549,
+      "offset" : 24602
+    },
+    {
+      "index" : 17,
+      "keyframe" : false,
+      "length" : 1420,
+      "offset" : 26151
+    },
+    {
+      "index" : 18,
+      "keyframe" : false,
+      "length" : 1403,
+      "offset" : 27571
+    },
+    {
+      "index" : 19,
+      "keyframe" : false,
+      "length" : 1476,
+      "offset" : 28974
+    },
+    {
+      "index" : 20,
+      "keyframe" : false,
+      "length" : 1917,
+      "offset" : 30450
+    },
+    {
+      "index" : 21,
+      "keyframe" : false,
+      "length" : 1511,
+      "offset" : 32367
+    },
+    {
+      "index" : 22,
+      "keyframe" : false,
+      "length" : 1547,
+      "offset" : 33878
+    },
+    {
+      "index" : 23,
+      "keyframe" : false,
+      "length" : 1610,
+      "offset" : 35425
+    },
+    {
+      "index" : 24,
+      "keyframe" : false,
+      "length" : 1590,
+      "offset" : 37035
+    },
+    {
+      "index" : 25,
+      "keyframe" : false,
+      "length" : 1743,
+      "offset" : 38625
+    },
+    {
+      "index" : 26,
+      "keyframe" : false,
+      "length" : 1451,
+      "offset" : 40368
+    },
+    {
+      "index" : 27,
+      "keyframe" : false,
+      "length" : 1645,
+      "offset" : 41819
+    },
+    {
+      "index" : 28,
+      "keyframe" : false,
+      "length" : 1625,
+      "offset" : 43464
+    },
+    {
+      "index" : 29,
+      "keyframe" : false,
+      "length" : 1609,
+      "offset" : 45089
+    },
+    {
+      "index" : 30,
+      "keyframe" : true,
+      "length" : 1685,
+      "offset" : 46698
+    },
+    {
+      "index" : 31,
+      "keyframe" : false,
+      "length" : 1316,
+      "offset" : 48383
+    },
+    {
+      "index" : 32,
+      "keyframe" : false,
+      "length" : 1475,
+      "offset" : 49699
+    },
+    {
+      "index" : 33,
+      "keyframe" : false,
+      "length" : 1482,
+      "offset" : 51174
+    },
+    {
+      "index" : 34,
+      "keyframe" : false,
+      "length" : 1458,
+      "offset" : 52656
+    },
+    {
+      "index" : 35,
+      "keyframe" : false,
+      "length" : 1882,
+      "offset" : 54114
+    },
+    {
+      "index" : 36,
+      "keyframe" : false,
+      "length" : 1644,
+      "offset" : 55996
+    },
+    {
+      "index" : 37,
+      "keyframe" : false,
+      "length" : 1464,
+      "offset" : 57640
+    },
+    {
+      "index" : 38,
+      "keyframe" : false,
+      "length" : 1470,
+      "offset" : 59104
+    },
+    {
+      "index" : 39,
+      "keyframe" : false,
+      "length" : 1601,
+      "offset" : 60574
+    },
+    {
+      "index" : 40,
+      "keyframe" : false,
+      "length" : 2034,
+      "offset" : 62175
+    },
+    {
+      "index" : 41,
+      "keyframe" : false,
+      "length" : 1529,
+      "offset" : 64209
+    },
+    {
+      "index" : 42,
+      "keyframe" : false,
+      "length" : 1491,
+      "offset" : 65738
+    },
+    {
+      "index" : 43,
+      "keyframe" : false,
+      "length" : 1506,
+      "offset" : 67229
+    },
+    {
+      "index" : 44,
+      "keyframe" : false,
+      "length" : 1545,
+      "offset" : 68735
+    },
+    {
+      "index" : 45,
+      "keyframe" : false,
+      "length" : 1713,
+      "offset" : 70280
+    },
+    {
+      "index" : 46,
+      "keyframe" : false,
+      "length" : 1533,
+      "offset" : 71993
+    },
+    {
+      "index" : 47,
+      "keyframe" : false,
+      "length" : 1460,
+      "offset" : 73526
+    },
+    {
+      "index" : 48,
+      "keyframe" : false,
+      "length" : 1529,
+      "offset" : 74986
+    },
+    {
+      "index" : 49,
+      "keyframe" : false,
+      "length" : 1540,
+      "offset" : 76515
+    },
+    {
+      "index" : 50,
+      "keyframe" : false,
+      "length" : 1966,
+      "offset" : 78055
+    },
+    {
+      "index" : 51,
+      "keyframe" : false,
+      "length" : 1437,
+      "offset" : 80021
+    },
+    {
+      "index" : 52,
+      "keyframe" : false,
+      "length" : 1440,
+      "offset" : 81458
+    },
+    {
+      "index" : 53,
+      "keyframe" : false,
+      "length" : 1594,
+      "offset" : 82898
+    },
+    {
+      "index" : 54,
+      "keyframe" : false,
+      "length" : 1285,
+      "offset" : 84492
+    },
+    {
+      "index" : 55,
+      "keyframe" : false,
+      "length" : 1720,
+      "offset" : 85777
+    },
+    {
+      "index" : 56,
+      "keyframe" : false,
+      "length" : 1443,
+      "offset" : 87497
+    },
+    {
+      "index" : 57,
+      "keyframe" : false,
+      "length" : 1618,
+      "offset" : 88940
+    },
+    {
+      "index" : 58,
+      "keyframe" : false,
+      "length" : 1886,
+      "offset" : 90558
+    },
+    {
+      "index" : 59,
+      "keyframe" : false,
+      "length" : 1651,
+      "offset" : 92444
+    }
+  ],
+  "codec" : "avc1.42c01f",
+  "byte_length" : 94095,
+  "duration_seconds" : 2,
+  "frame_rate" : 30,
+  "generator" : "VideoToolbox development fallback (FFmpeg unavailable)",
+  "height" : 360,
+  "keyframe_indexes" : [0, 30],
+  "sha256" : "370f9e45607d03c62462a4b5bf94ea2617e9c81b31f0dc54170ebebd577a0d14",
+  "width" : 640
+}

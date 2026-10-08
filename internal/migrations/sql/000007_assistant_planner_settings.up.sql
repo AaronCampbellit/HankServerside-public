@@ -1,0 +1,2 @@
+ALTER TABLE assistant_settings ADD COLUMN IF NOT EXISTS planner_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE assistant_settings ADD COLUMN IF NOT EXISTS planner_model TEXT NOT NULL DEFAULT '';

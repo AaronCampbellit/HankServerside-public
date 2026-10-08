@@ -1,0 +1,17 @@
+#!/usr/bin/python3
+import json
+import sys
+from hank_broker import Broker
+
+request = json.loads(sys.stdin.readline())
+broker = Broker()
+try:
+    result = broker.http("base_url", request["config"]["base_url"])
+    response = {"request_id": request["request_id"], "ok": True,
+                "output": {"text": "Configured service returned HTTP " + str(result["status"])}}
+except Exception:
+    response = {"request_id": request["request_id"], "ok": False,
+                "error": {"code": "service_unavailable", "message": "Review the app's configured URL and permission."}}
+finally:
+    broker.close()
+print(json.dumps(response))

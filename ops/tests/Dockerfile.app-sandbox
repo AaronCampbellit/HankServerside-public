@@ -1,0 +1,5 @@
+ARG APP_RUNTIME_IMAGE=hank-app-runtime-test:local
+FROM ${APP_RUNTIME_IMAGE} AS runtime
+FROM alpine:3.23
+RUN apk add --no-cache bubblewrap python3 ca-certificates
+COPY --from=runtime / /var/lib/hank/app-runtime/v1/

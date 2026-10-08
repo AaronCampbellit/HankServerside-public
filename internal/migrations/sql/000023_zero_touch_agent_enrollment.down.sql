@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS desktop_enrollment_challenges;
+ALTER TABLE desktop_identities DROP COLUMN IF EXISTS auth_session_id;
+ALTER TABLE desktop_trust_roots DROP CONSTRAINT IF EXISTS desktop_trust_roots_authority_mode_check;
+ALTER TABLE desktop_trust_roots DROP COLUMN IF EXISTS encrypted_private_key;
+ALTER TABLE desktop_trust_roots DROP COLUMN IF EXISTS authority_mode;
+DROP INDEX IF EXISTS agents_home_installation_id_idx;
+ALTER TABLE agents DROP COLUMN IF EXISTS enrolled_by_user_id;
+ALTER TABLE agents DROP COLUMN IF EXISTS installation_id;
+ALTER TABLE homes DROP CONSTRAINT IF EXISTS homes_agent_enrollment_policy_check;
+ALTER TABLE homes DROP COLUMN IF EXISTS agent_enrollment_policy;

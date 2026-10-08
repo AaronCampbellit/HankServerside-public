@@ -1,0 +1,76 @@
+# Export this dedicated target for native-agent restricted app execution.
+FROM alpine:3.23 AS app-runtime
+RUN apk add --no-cache python3 ca-certificates \
+    && mkdir -p /app /home /run /tmp /proc /dev \
+    && printf '1\n' > /hank-runtime-version
+
+FROM golang:1.26.8-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS build
+WORKDIR /src
+
+RUN apk add --no-cache nodejs npm python3
+
+COPY go.mod go.sum ./
+COPY third_party/go-smb2 ./third_party/go-smb2
+RUN go mod download
+
+COPY . .
+ARG BUILD_VERSION=dev
+ARG SOURCE_COMMIT=unknown
+RUN npm --prefix web/dashboard ci \
+	&& npm --prefix web/dashboard run build \
+	&& CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.buildVersion=${BUILD_VERSION}" -o /out/hank-server ./cmd/hank-server \
+	&& CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.buildSourceCommit=hank-source-commit:${SOURCE_COMMIT}" -o /out/hank-agent ./cmd/hank-agent \
+	&& python3 scripts/prepare-distribution-notices.py /out
+
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates ffmpeg yt-dlp bubblewrap \
+	&& addgroup -S hank \
+	&& adduser -S -G hank hank \
+	&& mkdir -p /var/lib/hank/db-ops/state /var/lib/hank/note-attachments /var/log/hank/db-ops \
+	&& chown -R hank:hank /var/lib/hank /var/log/hank
+RUN addgroup hank nobody \
+ && mkdir -p /var/lib/hank/monitoring \
+ && chown hank:65534 /var/lib/hank/monitoring \
+ && chmod 750 /var/lib/hank/monitoring
+COPY --from=app-runtime / /var/lib/hank/app-runtime/v1/
+WORKDIR /app
+COPY --from=build /out/hank-server /usr/local/bin/hank-server
+COPY --from=build /out/hank-agent /usr/local/bin/hank-agent
+COPY --from=build /out/LICENSE /out/THIRD_PARTY_NOTICES.md /out/THIRD_PARTY_SOURCE.txt /app/
+COPY --from=build /out/third-party-licenses /app/third-party-licenses
+COPY --from=build /out/third-party-source /app/third-party-source
+COPY --from=build /src/README.md /src/AGENTS.md /app/
+COPY --from=build /src/docs /app/docs
+COPY --from=build /src/schemas /app/schemas
+# Curated, read-only source snapshot exposed via the MCP docs tools (code-reference/).
+# This is a build-time copy for search/brainstorming, NOT the running source. .env,
+# .git, data, and *.db are already excluded by .dockerignore, so /src holds source
+# only. Pass --build-arg SOURCE_COMMIT=$(git rev-parse HEAD) to stamp provenance.
+ARG SOURCE_COMMIT=unknown
+ARG BUILD_VERSION=dev
+LABEL org.opencontainers.image.title="HankServerside" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${BUILD_VERSION}"
+COPY --from=build /src/cmd /app/code-reference/cmd
+COPY --from=build /src/internal /app/code-reference/internal
+COPY --from=build /src/go.mod /app/code-reference/go.mod
+COPY --from=build /src/third_party /app/code-reference/third_party
+RUN printf '%s\n' \
+	'# Project code reference (read-only snapshot)' \
+	'' \
+	'A point-in-time copy of the HankServerside Go source (cmd/, internal/, go.mod),' \
+	'exposed through the MCP docs tools for searching and brainstorming about the' \
+	'codebase. It is shipped in the image at build time and may lag the live source.' \
+	'' \
+	"Source commit: ${SOURCE_COMMIT}" \
+	> /app/code-reference/REFERENCE.md \
+	&& chmod -R a+rX /app/code-reference /app/docs /app/schemas \
+	&& chmod a+r /app/README.md /app/AGENTS.md
+USER hank
+# Verify access using the same identity as the server, including directories
+# copied from developer checkouts that may have restrictive host permissions.
+RUN test -r /app/code-reference/internal/cloud/server.go \
+	&& test -r /app/code-reference/internal/store/store.go \
+	&& test -r /app/docs/deployment.md
+EXPOSE 8080
+CMD ["/usr/local/bin/hank-server"]

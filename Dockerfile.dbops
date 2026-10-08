@@ -1,0 +1,30 @@
+FROM golang:1.26.8-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS build
+WORKDIR /src
+RUN apk add --no-cache python3
+
+COPY go.mod go.sum ./
+COPY third_party/go-smb2 ./third_party/go-smb2
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/hank-db-ops ./cmd/hank-db-ops \
+    && python3 scripts/prepare-distribution-notices.py /out
+
+FROM postgres:18-alpine
+RUN apk add --no-cache pgbackrest docker-cli docker-cli-compose bash tar
+RUN addgroup -S hankdbops \
+	&& addgroup -S docker \
+	&& adduser -S -G hankdbops hankdbops \
+	&& addgroup hankdbops docker
+WORKDIR /app
+COPY --from=build /out/hank-db-ops /usr/local/bin/hank-db-ops
+COPY --from=build /out/LICENSE /out/THIRD_PARTY_NOTICES.md /out/THIRD_PARTY_SOURCE.txt /app/
+COPY --from=build /out/third-party-licenses /app/third-party-licenses
+COPY --from=build /out/third-party-source /app/third-party-source
+COPY configs/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
+COPY docker/dbops/entrypoint.sh /usr/local/bin/hank-db-ops-entrypoint
+RUN chmod 755 /usr/local/bin/hank-db-ops \
+	&& chmod 755 /usr/local/bin/hank-db-ops-entrypoint \
+	&& chmod 644 /etc/pgbackrest/pgbackrest.conf
+ENTRYPOINT ["hank-db-ops-entrypoint"]
+CMD ["/usr/local/bin/hank-db-ops"]

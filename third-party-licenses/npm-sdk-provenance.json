@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "package": "@modelcontextprotocol/sdk",
+  "version": "1.31.0",
+  "upstream": "https://github.com/modelcontextprotocol/typescript-sdk",
+  "upstream_commit": "4b0051f400219f8d8855f9a5433c6df35f15a639",
+  "archive": "https://registry.npmjs.org/@modelcontextprotocol/sdk/-/sdk-1.31.0.tgz",
+  "archive_integrity": "sha512-UvTMgnNlnIBO/22ob2RcVGDlcvOslQs8T59+FTGdA0L27a39fdGF/EDETNtDVK4DZGpwomlsYpRdA8UXcVL/pw==",
+  "license_spdx": "MIT",
+  "license_path": "third-party-licenses/npm/__modelcontextprotocol__sdk/1.31.0/LICENSE",
+  "license_sha256": "5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d",
+  "license_copy": "Unmodified bytes from the exact npm package installed with npm ci.",
+  "scope": "This third-party package retains its own MIT terms; original Hank software remains rights reserved."
+}

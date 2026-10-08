@@ -1,0 +1,21 @@
+.DS_Store
+.env
+.env.*
+.env.local
+/bin/
+/data/
+/dist/
+/coverage.out
+/web/dashboard/node_modules/
+/web/dashboard/.mcp-kanban-dist/
+/internal/cloud/ui/react/
+/ops/prometheus/secrets/
+/.worktrees/
+ops/alertmanager/secrets/
+/.codex/remote-desktop-evidence/
+
+# Private local agent/browser runs and generated evidence
+/.codex/
+/.playwright/
+/.playwright-cli/
+/.claude/

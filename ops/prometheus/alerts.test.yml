@@ -1,0 +1,146 @@
+rule_files:
+- alerts.yml
+evaluation_interval: 1m
+tests:
+- name: Failed cloud scrape alerts without Hank metrics
+  interval: 1m
+  input_series:
+  - series: up{job="hank-cloud",instance="cloud:8080"}
+    values: '0x25'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankCloudScrapeMissing
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: hank-cloud
+        instance: cloud:8080
+      exp_annotations: &id001
+        summary: Hank metrics collection is unavailable
+        runbook: docs/runbooks/single-host-compose.md
+- name: Absent target and delivery cannot silently pass
+  interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankCloudScrapeMissing
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: hank-cloud
+      exp_annotations: *id001
+  - eval_time: 20m
+    alertname: HankAlertDeliveryUnconfigured
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: alertmanager
+      exp_annotations:
+        summary: Hank has no configured alert delivery integration
+        runbook: docs/runbooks/single-host-compose.md
+- name: Healthy scrapes and delivery do not alert
+  interval: 1m
+  input_series:
+  - series: up{job="hank-cloud"}
+    values: 1x25
+  - series: up{job="alertmanager"}
+    values: 1x25
+  - series: alertmanager_integrations{job="alertmanager"}
+    values: 1x25
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankCloudScrapeMissing
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: HankAlertmanagerScrapeMissing
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: HankAlertDeliveryUnconfigured
+    exp_alerts: []
+- name: Worker connectivity cannot mask primary loss
+  interval: 1m
+  input_series:
+  - series: hank_online_agents{job="hank-cloud"}
+    values: 2x25
+  - series: hank_primary_agent_online{job="hank-cloud"}
+    values: '0x25'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankAgentOffline
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: hank-cloud
+      exp_annotations:
+        summary: Primary Hank Agent is offline
+        runbook: docs/runbooks/agent-offline.md
+- name: Primary online does not alert
+  interval: 1m
+  input_series:
+  - series: hank_primary_agent_online{job="hank-cloud"}
+    values: 1x25
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankAgentOffline
+    exp_alerts: []
+- name: Persistent rollback gauge alerts even without increase
+  interval: 1m
+  input_series:
+  - series: hank_file_operation_jobs{job="hank-cloud",status="rollback_required"}
+    values: 2x25
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankFileJobsRequireRollback
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        job: hank-cloud
+        status: rollback_required
+      exp_annotations:
+        summary: Hank file operation jobs require rollback
+        runbook: docs/runbooks/file-transfer-failures.md
+- name: Resolved rollback clears the alert
+  interval: 1m
+  input_series:
+  - series: hank_file_operation_jobs{job="hank-cloud",status="rollback_required"}
+    values: 2x17 0x8
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankFileJobsRequireRollback
+    exp_alerts: []
+- name: Missing host metric alerts even while exporter is up
+  interval: 1m
+  input_series:
+  - series: up{job="hank-host"}
+    values: 1x25
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankHostMetricsMissing
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: hank-host
+        mountpoint: /
+      exp_annotations:
+        summary: Hank host filesystem metrics are unavailable
+        runbook: docs/runbooks/single-host-compose.md
+- name: Disk usage at ninety percent alerts
+  interval: 1m
+  input_series:
+  - series: node_filesystem_avail_bytes{job="hank-host",mountpoint="/",fstype="ext4",device="/dev/test"}
+    values: 10x25
+  - series: node_filesystem_size_bytes{job="hank-host",mountpoint="/",fstype="ext4",device="/dev/test"}
+    values: 100x25
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HankDiskUsageHigh
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        job: hank-host
+        mountpoint: /
+        fstype: ext4
+        device: /dev/test
+      exp_annotations:
+        summary: Hank host disk usage is high
+        runbook: docs/runbooks/single-host-compose.md

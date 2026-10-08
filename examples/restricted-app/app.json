@@ -1,0 +1,10 @@
+{
+  "schema_version": "hank.app.v1",
+  "id": "restricted_example",
+  "name": "Restricted app example",
+  "version": "1.0.0",
+  "runtime": {"type": "stdio", "command": "bin/example"},
+  "commands": [{"id": "check", "mode": "request_response", "timeout_seconds": 30}],
+  "config": {"settings_schema": {"fields": [{"key": "base_url", "label": "Service URL", "type": "url", "required": true}]}},
+  "permissions": {"network": [{"kind": "configured_base_url", "field": "base_url"}]}
+}

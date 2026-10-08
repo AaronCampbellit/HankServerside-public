@@ -1,0 +1,5 @@
+# Preserve the pinned upstream whitespace and literal unified patch evidence.
+client.go -whitespace
+smb2_test.go -whitespace
+.github/workflows/go.yml -whitespace
+HANK-PATCH.patch -text -whitespace
